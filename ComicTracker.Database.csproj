@@ -1,0 +1,71 @@
+﻿<Project>
+
+    <!-- Explicit top import to be able to override default targets after bottom import -->
+    <Import Project="Sdk.props" Sdk="Microsoft.NET.Sdk" />
+
+    <!-- 
+        See the following for details:
+        * https://docs.microsoft.com/en-us/nuget/create-packages/creating-a-package#from-a-convention-based-working-directory
+        * https://docs.microsoft.com/en-us/visualstudio/msbuild/how-to-extend-the-visual-studio-build-process?view=vs-2019
+        * https://docs.microsoft.com/en-us/dotnet/core/tools/custom-templates (coming later)
+    -->
+
+    <PropertyGroup>
+        <IncludeContentInPack>true</IncludeContentInPack>
+        <IncludeBuildOutput>false</IncludeBuildOutput>
+        <ContentTargetFolders>content</ContentTargetFolders>
+
+        <TargetFramework>netstandard2.0</TargetFramework>
+        <Configuration>Release</Configuration>
+        <OutputPath>package</OutputPath>
+        <NoWarn>NU5110;NU5111;NU5128</NoWarn>
+        
+        <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+        
+    </PropertyGroup>
+
+    <ItemGroup>
+        <Compile Remove="**\*" />
+        <Content Include="db\**\*" />
+        <Content Include="scripts\**\*" />
+        <Content Include=".config\**\*" />
+        <Content Include="Deploy.ps1" />
+        
+        <None Remove="logs\**\*" />
+        <None Remove="package\**\*" />
+        <Content Remove="package\**\*" />
+    </ItemGroup>
+
+
+    <!-- Explicit bottom import to be able to override default targets after -->
+    <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" />
+
+    <!-- Override build target to avoid building an empty DLL -->
+    <Target Name="Build" DependsOnTargets="">
+    </Target>
+
+    <!-- Override resolve references target to avoid building an empty DLL -->
+    <Target Name="ResolveReferences" DependsOnTargets="">
+    </Target>
+
+
+    <Target Name="ToolRestore">
+        <Exec Command="dotnet tool restore" />
+    </Target>
+
+    <Target Name="CheckProperties">
+        <Error Text="The GrateEnvironment property must be set on the command line or in an environment variable." Condition="'$(GrateEnvironment)' == ''" />
+    </Target>
+
+    <Target Name="UpdateDatabase" DependsOnTargets="ToolRestore;CheckProperties">
+        <PropertyGroup>
+            <CommandLine>pwsh scripts/Deploy.ps1</CommandLine>
+            <CommandLine>$(CommandLine) -ConnectionString "$(ConnectionString)" </CommandLine>
+            <CommandLine>$(CommandLine) -Environment "$(GrateEnvironment)" </CommandLine>
+            <CommandLine>$(CommandLine) -Version "$(Version)" </CommandLine>
+        </PropertyGroup>
+
+        <Exec Command="$(CommandLine)" />
+    </Target>
+
+</Project>
