@@ -1,0 +1,57 @@
+name: Deploy database
+
+# Runs a published migration image against a cloud database.
+# Each target is a GitHub Environment (Settings > Environments) holding the
+# secret DB_CONNECTION_STRING. The database must already exist and accept
+# connections from GitHub-hosted runners - see README "Deploying to a cloud database".
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment (GitHub Environment and grate --environment)
+        type: choice
+        options: [DEV, PRODUCTION]
+        required: true
+      image_tag:
+        description: Image tag published by CI (e.g. 0.1.0 or sha-370efe3)
+        type: string
+        required: true
+
+permissions:
+  contents: read
+  packages: read
+
+# Never run two migrations against the same database at once
+concurrency:
+  group: deploy-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    name: Migrate ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run migrations
+        env:
+          APP_CONNSTRING: ${{ secrets.DB_CONNECTION_STRING }}
+          ENVIRONMENT: ${{ inputs.environment }}
+          IMAGE: ghcr.io/${{ github.repository_owner }}/comictracker-database:${{ inputs.image_tag }}
+        run: |
+          if [ -z "$APP_CONNSTRING" ]; then
+            echo "::error::Secret DB_CONNECTION_STRING is not set for environment '$ENVIRONMENT'."
+            exit 1
+          fi
+          # Outside LOCAL the database is provisioned up front, so grate must not create it
+          docker run --rm \
+            -e APP_CONNSTRING \
+            -e ENVIRONMENT \
+            -e CREATE_DATABASE=false \
+            "$IMAGE"

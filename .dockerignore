@@ -1,0 +1,3 @@
+# Only the SQL scripts go into the image
+*
+!db/
